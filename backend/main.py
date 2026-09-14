@@ -1,26 +1,55 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-from backend.service.prediction import predict_groundwater
-from backend.service.risk_engine import calculate_risk
-from backend.service.advisory import generate_advisory
+from backend.service.prediction import (
+    predict_groundwater
+)
+
+from backend.service.risk_engine import (
+    calculate_risk
+)
+
+from backend.service.advisory import (
+    generate_advisory
+)
+
 from backend.service.data_service import (
     get_stations,
     get_station_data,
     get_station_reliability
 )
-from backend.service.forecast import generate_forecast
-from backend.service.explainability import explain_prediction
-from backend.service.stress_clock import calculate_stress_clock
+
+from backend.service.forecast import (
+    generate_forecast
+)
+
+from backend.service.explainability import (
+    explain_prediction
+)
+
+from backend.service.stress_clock import (
+    calculate_stress_clock
+)
+
+from backend.service.intelligence import (
+    generate_intelligence
+)
+
+from backend.service.risk_map import (
+    generate_risk_map
+)
 
 
 # ==================================================
-# FASTAPI APP
+# FASTAPI APPLICATION
 # ==================================================
 
 app = FastAPI(
     title="Groundwater AI",
-    description="AI-based groundwater risk prediction system",
+    description=(
+        "AI-based groundwater risk prediction "
+        "and early-warning system"
+    ),
     version="1.0.0"
 )
 
@@ -36,6 +65,7 @@ class PredictionRequest(BaseModel):
     gw_lag_3: float
 
     gw_rolling_3: float
+
     gw_change_1m: float
 
     rainfall_mm: float
@@ -47,6 +77,7 @@ class PredictionRequest(BaseModel):
     rain_rolling_3: float
 
     month_num: int
+
     year: int
 
     current_groundwater: float
@@ -83,9 +114,13 @@ def stations():
 # ==================================================
 
 @app.get("/stations/{station_name}")
-def station_information(station_name: str):
+def station_information(
+    station_name: str
+):
 
-    data = get_station_data(station_name)
+    data = get_station_data(
+        station_name
+    )
 
     if data is None:
 
@@ -105,13 +140,17 @@ def station_information(station_name: str):
 # ==================================================
 
 @app.get("/stations/{station_name}/predict")
-def station_prediction(station_name: str):
+def station_prediction(
+    station_name: str
+):
 
-    # --------------------------------------------------
-    # GET STATION DATA
-    # --------------------------------------------------
+    # ----------------------------------------------
+    # Station data
+    # ----------------------------------------------
 
-    data = get_station_data(station_name)
+    data = get_station_data(
+        station_name
+    )
 
     if data is None:
 
@@ -120,81 +159,93 @@ def station_prediction(station_name: str):
             detail="Station not found"
         )
 
-    # --------------------------------------------------
-    # GET RELIABILITY
-    # --------------------------------------------------
+    # ----------------------------------------------
+    # Reliability
+    # ----------------------------------------------
 
     reliability = get_station_reliability(
         station_name
     )
 
-    # --------------------------------------------------
-    # PREPARE MODEL INPUT
-    # --------------------------------------------------
+    # ----------------------------------------------
+    # Prediction
+    # ----------------------------------------------
 
     input_data = data.copy()
-
-    # --------------------------------------------------
-    # PREDICTION
-    # --------------------------------------------------
 
     prediction_result = predict_groundwater(
         input_data
     )
 
-    predicted_groundwater = (
+    predicted_groundwater = float(
         prediction_result["prediction"]
     )
 
-    # --------------------------------------------------
-    # FORECAST
-    # --------------------------------------------------
+    # ----------------------------------------------
+    # Forecast
+    # ----------------------------------------------
 
     forecast = generate_forecast(
-        predicted_groundwater
+        data
     )
 
-    # --------------------------------------------------
-    # RISK ENGINE
-    # --------------------------------------------------
+    # ----------------------------------------------
+    # Risk
+    # ----------------------------------------------
 
     risk = calculate_risk(
-        predicted_groundwater=predicted_groundwater,
-        current_groundwater=data["current_groundwater"],
-        gw_change_1m=data["gw_change_1m"],
-        rainfall_mm=data["rainfall_mm"],
-        reliability=reliability["reliability"]
+
+        predicted_groundwater=
+            predicted_groundwater,
+
+        current_groundwater=
+            data["current_groundwater"],
+
+        gw_change_1m=
+            data["gw_change_1m"],
+
+        rainfall_mm=
+            data["rainfall_mm"],
+
+        reliability=
+            reliability["reliability"]
     )
 
-    # --------------------------------------------------
-    # EXPLAINABILITY
-    # --------------------------------------------------
+    # ----------------------------------------------
+    # WHY
+    # ----------------------------------------------
 
     why = explain_prediction(
         input_data
     )
 
-    # --------------------------------------------------
-    # STRESS CLOCK
-    # --------------------------------------------------
+    # ----------------------------------------------
+    # Stress Clock
+    # ----------------------------------------------
 
     stress_clock = calculate_stress_clock(
-        current_groundwater=data["current_groundwater"],
-        predicted_groundwater=predicted_groundwater
+
+        current_groundwater=
+            data["current_groundwater"],
+
+        predicted_groundwater=
+            predicted_groundwater
     )
 
-    # --------------------------------------------------
-    # ADVISORY
-    # --------------------------------------------------
+    # ----------------------------------------------
+    # Advisory
+    # ----------------------------------------------
 
     advisory = generate_advisory(
+
         risk["risk_level"],
+
         data["gw_change_1m"]
     )
 
-    # --------------------------------------------------
-    # FINAL RESPONSE
-    # --------------------------------------------------
+    # ----------------------------------------------
+    # Response
+    # ----------------------------------------------
 
     return {
 
@@ -236,17 +287,58 @@ def station_prediction(station_name: str):
         "debug": {
 
             "model_inputs":
-                prediction_result["model_inputs"],
+                prediction_result[
+                    "model_inputs"
+                ],
 
             "medians_used":
-                prediction_result["medians_used"],
+                prediction_result[
+                    "medians_used"
+                ],
 
             "model_features":
                 list(
-                    prediction_result["model_inputs"].keys()
+                    prediction_result[
+                        "model_inputs"
+                    ].keys()
                 )
         }
     }
+
+
+# ==================================================
+# BLOCK INTELLIGENCE
+# ==================================================
+
+@app.get(
+    "/stations/{station_name}/intelligence"
+)
+def station_intelligence(
+    station_name: str
+):
+
+    result = generate_intelligence(
+        station_name
+    )
+
+    if result["status"] == "error":
+
+        raise HTTPException(
+            status_code=404,
+            detail=result["message"]
+        )
+
+    return result
+
+
+# ==================================================
+# GROUNDWATER RISK MAP
+# ==================================================
+
+@app.get("/risk-map")
+def groundwater_risk_map():
+
+    return generate_risk_map()
 
 
 # ==================================================
@@ -258,83 +350,101 @@ def manual_prediction(
     request: PredictionRequest
 ):
 
-    # --------------------------------------------------
-    # CONVERT REQUEST TO DICTIONARY
-    # --------------------------------------------------
+    # ----------------------------------------------
+    # Convert request
+    # ----------------------------------------------
 
     input_data = request.model_dump()
 
-    # --------------------------------------------------
-    # PREDICTION
-    # --------------------------------------------------
+    # ----------------------------------------------
+    # Prediction
+    # ----------------------------------------------
 
     prediction_result = predict_groundwater(
         input_data
     )
 
-    predicted_groundwater = (
+    predicted_groundwater = float(
         prediction_result["prediction"]
     )
 
-    # --------------------------------------------------
-    # RISK
-    # --------------------------------------------------
+    # ----------------------------------------------
+    # Risk
+    # ----------------------------------------------
 
     risk = calculate_risk(
-        predicted_groundwater=predicted_groundwater,
+
+        predicted_groundwater=
+            predicted_groundwater,
+
         current_groundwater=
             request.current_groundwater,
+
         gw_change_1m=
             request.gw_change_1m,
+
         rainfall_mm=
             request.rainfall_mm,
-        reliability="normal"
+
+        reliability=
+            "normal"
     )
 
-    # --------------------------------------------------
-    # FORECAST
-    # --------------------------------------------------
+    # ----------------------------------------------
+    # Manual prediction does not contain
+    # station date context
+    # ----------------------------------------------
 
-    forecast = generate_forecast(
-        predicted_groundwater
-    )
+    forecast = {
 
-    # --------------------------------------------------
-    # EXPLAINABILITY
-    # --------------------------------------------------
+        "status":
+            "single_prediction_only",
+
+        "message": (
+            "Use the station intelligence "
+            "endpoint for 1M / 3M / 6M forecasting."
+        )
+    }
+
+    # ----------------------------------------------
+    # WHY
+    # ----------------------------------------------
 
     why = explain_prediction(
         input_data
     )
 
-    # --------------------------------------------------
-    # STRESS CLOCK
-    # --------------------------------------------------
+    # ----------------------------------------------
+    # Stress Clock
+    # ----------------------------------------------
 
     stress_clock = calculate_stress_clock(
+
         current_groundwater=
             request.current_groundwater,
+
         predicted_groundwater=
             predicted_groundwater
     )
 
-    # --------------------------------------------------
-    # ADVISORY
-    # --------------------------------------------------
+    # ----------------------------------------------
+    # Advisory
+    # ----------------------------------------------
 
     advisory = generate_advisory(
+
         risk["risk_level"],
+
         request.gw_change_1m
     )
 
-    # --------------------------------------------------
-    # RESPONSE
-    # --------------------------------------------------
+    # ----------------------------------------------
+    # Response
+    # ----------------------------------------------
 
     return {
 
-        "status":
-            "success",
+        "status": "success",
 
         "prediction": {
 
@@ -363,14 +473,20 @@ def manual_prediction(
         "debug": {
 
             "model_inputs":
-                prediction_result["model_inputs"],
+                prediction_result[
+                    "model_inputs"
+                ],
 
             "medians_used":
-                prediction_result["medians_used"],
+                prediction_result[
+                    "medians_used"
+                ],
 
             "model_features":
                 list(
-                    prediction_result["model_inputs"].keys()
+                    prediction_result[
+                        "model_inputs"
+                    ].keys()
                 )
         }
     }

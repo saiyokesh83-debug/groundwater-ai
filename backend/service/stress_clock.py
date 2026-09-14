@@ -1,41 +1,80 @@
+# ==================================================
+# GROUNDWATER STRESS CLOCK
+# ==================================================
+
 def calculate_stress_clock(
     current_groundwater: float,
-    predicted_groundwater: float,
-    critical_threshold: float = 50.0
+    predicted_groundwater: float
 ) -> dict:
+    """
+    Estimate near-term groundwater trend.
 
-    # Calculate predicted monthly change
-    monthly_change = predicted_groundwater - current_groundwater
+    IMPORTANT:
+    The threshold used here is an AI monitoring reference,
+    not an official CGWB groundwater classification.
+    """
 
-    # No meaningful decline
-    if monthly_change >= 0:
-        return {
-            "status": "not_declining",
-            "months_to_critical": None,
-            "critical_threshold": critical_threshold,
-            "message": "Current prediction does not show a decline toward the configured threshold."
-        }
+    change = predicted_groundwater - current_groundwater
 
-    # Already at or beyond critical threshold
-    if current_groundwater >= critical_threshold:
-        return {
-            "status": "already_critical",
-            "months_to_critical": 0,
-            "critical_threshold": critical_threshold,
-            "message": "Current groundwater value is already at or beyond the configured threshold."
-        }
+    # Small changes are treated as approximately stable
+    if abs(change) < 0.10:
+        status = "stable"
 
-    # Estimate months to reach threshold
-    monthly_decline = abs(monthly_change)
+    elif change < 0:
+        status = "declining"
 
-    distance_to_threshold = critical_threshold - current_groundwater
+    else:
+        status = "improving"
 
-    months = distance_to_threshold / monthly_decline
+    # For the MVP, avoid presenting a misleading
+    # long-term threshold-crossing date.
+    if status == "declining":
+        message = (
+            "Groundwater shows a declining trend. "
+            "Continue monitoring and verify conditions "
+            "through field observations."
+        )
+
+    elif status == "improving":
+        message = (
+            "Groundwater shows an improving trend. "
+            "Continue monitoring to confirm whether "
+            "the improvement persists."
+        )
+
+    else:
+        message = (
+            "Groundwater is approximately stable over "
+            "the forecast interval."
+        )
 
     return {
-        "status": "declining",
-        "months_to_critical": round(months, 1),
-        "critical_threshold": critical_threshold,
-        "estimated_monthly_change": round(monthly_change, 2),
-        "message": "Estimated time based on the current predicted trend."
+        "status": status,
+
+        "current_groundwater": round(
+            current_groundwater,
+            3
+        ),
+
+        "predicted_groundwater": round(
+            predicted_groundwater,
+            3
+        ),
+
+        "estimated_change": round(
+            change,
+            3
+        ),
+
+        "threshold_status": (
+            "No official critical threshold applied"
+        ),
+
+        "message": message,
+
+        "note": (
+            "This stress clock is an AI-based trend "
+            "monitoring indicator. It is not an official "
+            "CGWB groundwater classification or threshold."
+        )
     }
